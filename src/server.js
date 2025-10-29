@@ -97,25 +97,42 @@ app.post("/api/register", async (req, res) => {
 app.post("/api/login", async (req, res) => {
   try {
     const { email, password } = req.body;
+
+    // 1) Validación básica
+    if (!email || !password) {
+      return res.status(400).json({ message: "Email y password son requeridos" });
+    }
+
+    // 2) Buscar usuario
     const user = await prisma.usuario.findUnique({ where: { email } });
     if (!user) return res.status(401).json({ message: "Usuario no existe" });
 
+    // 3) Verificar password
     const passwordMatch = await bcrypt.compare(password, user.password);
-    if (!passwordMatch)
+    if (!passwordMatch) {
       return res.status(401).json({ message: "Credenciales incorrectas" });
+    }
 
+    // 4) Verificar secreto JWT
+    if (!process.env.JWT_SECRET) {
+      console.error("⚠️ JWT_SECRET no está definido en el entorno");
+      return res.status(500).json({ message: "Configuración inválida del servidor" });
+    }
+
+    // 5) Firmar token
     const token = jwt.sign(
       { id: user.id, rol: user.rol },
       process.env.JWT_SECRET,
       { expiresIn: "1d" }
     );
 
-    res.json({ token, rol: user.rol, nombre: user.nombre });
+    return res.json({ token, rol: user.rol, nombre: user.nombre });
   } catch (error) {
     console.error("❌ Error en login:", error);
-    res.status(500).json({ message: "Error interno en login" });
+    return res.status(500).json({ message: "Error interno en login" });
   }
 });
+
 
 // --------------------
 // 💰 INGRESOS
