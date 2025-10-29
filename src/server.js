@@ -16,38 +16,54 @@ dotenv.config({ path: path.resolve(__dirname, "../.env") });
 const app = express();
 const prisma = new PrismaClient();
 
-app.use(express.json());
+// --------------------
+// 🌐 CORS (whitelist)
+//    Puedes sobrescribir orígenes con la env FRONTEND_ORIGINS
+//    ej: FRONTEND_ORIGINS="http://localhost:4200,https://frontend-gestor-parroquia.vercel.app"
+// --------------------
+const defaultOrigins = [
+  "http://localhost:4200",
+  
+  "https://frontend-gestor-parroquia.vercel.app",
+];
 
-// --------------------
-// 🌐 CORS (Express 5 compatible)
-// --------------------
+const whitelist = (process.env.FRONTEND_ORIGINS
+  ? process.env.FRONTEND_ORIGINS.split(",")
+  : defaultOrigins
+).map((s) => s.trim()).filter(Boolean);
+
+// Si usas JWT por header (sin cookies), deja false. Si usas cookies, true + cookies SameSite=None; Secure
+const USE_CREDENTIALS = false;
+
 app.use(
   cors({
-    origin: "http://localhost:4200",
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    origin: function (origin, cb) {
+      if (!origin || whitelist.includes(origin)) return cb(null, true);
+      return cb(new Error("CORS not allowed"), false);
+    },
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: true,
+    credentials: USE_CREDENTIALS,
   })
 );
 
-// 🔁 Manejo manual del preflight OPTIONS
-app.use((req, res, next) => {
-  if (req.method === "OPTIONS") {
-    res.header("Access-Control-Allow-Origin", "http://localhost:4200");
-    res.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
-    res.header("Access-Control-Allow-Headers", "Content-Type,Authorization");
-    return res.sendStatus(200);
-  }
-  next();
-});
+// ✅ Responder preflight correctamente
+app.options("*", cors());
+
+// 📦 Body parser JSON
+app.use(express.json());
+
+// --------------------
+// 🩺 Healthcheck
+// --------------------
+app.get("/api/health", (_, res) => res.json({ ok: true }));
 
 // --------------------
 // 🔒 Middleware verifyToken
 // --------------------
 function verifyToken(req, res, next) {
   const authHeader = req.headers["authorization"];
-  if (!authHeader)
-    return res.status(403).json({ message: "Token requerido" });
+  if (!authHeader) return res.status(403).json({ message: "Token requerido" });
 
   try {
     const token = authHeader.startsWith("Bearer ")
@@ -79,21 +95,26 @@ app.post("/api/register", async (req, res) => {
 });
 
 app.post("/api/login", async (req, res) => {
-  const { email, password } = req.body;
-  const user = await prisma.usuario.findUnique({ where: { email } });
-  if (!user) return res.status(401).json({ message: "Usuario no existe" });
+  try {
+    const { email, password } = req.body;
+    const user = await prisma.usuario.findUnique({ where: { email } });
+    if (!user) return res.status(401).json({ message: "Usuario no existe" });
 
-  const passwordMatch = await bcrypt.compare(password, user.password);
-  if (!passwordMatch)
-    return res.status(401).json({ message: "Credenciales incorrectas" });
+    const passwordMatch = await bcrypt.compare(password, user.password);
+    if (!passwordMatch)
+      return res.status(401).json({ message: "Credenciales incorrectas" });
 
-  const token = jwt.sign(
-    { id: user.id, rol: user.rol },
-    process.env.JWT_SECRET,
-    { expiresIn: "1d" }
-  );
+    const token = jwt.sign(
+      { id: user.id, rol: user.rol },
+      process.env.JWT_SECRET,
+      { expiresIn: "1d" }
+    );
 
-  res.json({ token, rol: user.rol, nombre: user.nombre });
+    res.json({ token, rol: user.rol, nombre: user.nombre });
+  } catch (error) {
+    console.error("❌ Error en login:", error);
+    res.status(500).json({ message: "Error interno en login" });
+  }
 });
 
 // --------------------
@@ -128,7 +149,12 @@ app.put("/api/ingresos/:id", verifyToken, async (req, res) => {
     const { categoria, descripcion, monto, fecha } = req.body;
     const ingreso = await prisma.ingreso.update({
       where: { id: parseInt(id) },
-      data: { categoria, descripcion, monto: parseFloat(monto), fecha: new Date(fecha) },
+      data: {
+        categoria,
+        descripcion,
+        monto: parseFloat(monto),
+        fecha: new Date(fecha),
+      },
     });
     res.json(ingreso);
   } catch (error) {
@@ -180,7 +206,12 @@ app.put("/api/egresos/:id", verifyToken, async (req, res) => {
     const { categoria, descripcion, monto, fecha } = req.body;
     const egreso = await prisma.egreso.update({
       where: { id: parseInt(id) },
-      data: { categoria, descripcion, monto: parseFloat(monto), fecha: new Date(fecha) },
+      data: {
+        categoria,
+        descripcion,
+        monto: parseFloat(monto),
+        fecha: new Date(fecha),
+      },
     });
     res.json(egreso);
   } catch (error) {
@@ -243,7 +274,7 @@ app.get("/api/reportes/ingresos-por-categoria", verifyToken, async (req, res) =>
       where,
     });
 
-    res.json(data.map(d => ({ categoria: d.categoria, total: d._sum.monto ?? 0 })));
+    res.json(data.map((d) => ({ categoria: d.categoria, total: d._sum.monto ?? 0 })));
   } catch (error) {
     console.error("❌ Error en /reportes/ingresos-por-categoria:", error);
     res.status(500).json({ message: "Error interno en reportes" });
@@ -266,7 +297,7 @@ app.get("/api/reportes/egresos-por-categoria", verifyToken, async (req, res) => 
       where,
     });
 
-    res.json(data.map(d => ({ categoria: d.categoria, total: d._sum.monto ?? 0 })));
+    res.json(data.map((d) => ({ categoria: d.categoria, total: d._sum.monto ?? 0 })));
   } catch (error) {
     console.error("❌ Error en /reportes/egresos-por-categoria:", error);
     res.status(500).json({ message: "Error interno en reportes" });
@@ -279,4 +310,11 @@ app.get("/api/reportes/egresos-por-categoria", verifyToken, async (req, res) => 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`✅ Backend en ejecución en el puerto ${PORT}`);
+});
+
+// (Opcional) Manejo elegante de cierre
+process.on("SIGTERM", async () => {
+  console.log("🛑 Cerrando servidor...");
+  await prisma.$disconnect();
+  process.exit(0);
 });
