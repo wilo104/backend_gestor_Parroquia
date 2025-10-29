@@ -1,0 +1,281 @@
+// --------------------
+// 📦 DEPENDENCIAS
+// --------------------
+const express = require("express");
+const cors = require("cors");
+const dotenv = require("dotenv");
+const path = require("path");
+const jwt = require("jsonwebtoken");
+const bcrypt = require("bcrypt");
+const { PrismaClient } = require("@prisma/client");
+
+// --------------------
+// ⚙️ CONFIGURACIÓN BASE
+// --------------------
+dotenv.config({ path: path.resolve(__dirname, "../.env") });
+const app = express();
+const prisma = new PrismaClient();
+
+app.use(express.json());
+
+// --------------------
+// 🌐 CORS (Express 5 compatible)
+// --------------------
+app.use(
+  cors({
+    origin: "http://localhost:4200",
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
+  })
+);
+
+// 🔁 Manejo manual del preflight OPTIONS
+app.use((req, res, next) => {
+  if (req.method === "OPTIONS") {
+    res.header("Access-Control-Allow-Origin", "http://localhost:4200");
+    res.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+    res.header("Access-Control-Allow-Headers", "Content-Type,Authorization");
+    return res.sendStatus(200);
+  }
+  next();
+});
+
+// --------------------
+// 🔒 Middleware verifyToken
+// --------------------
+function verifyToken(req, res, next) {
+  const authHeader = req.headers["authorization"];
+  if (!authHeader)
+    return res.status(403).json({ message: "Token requerido" });
+
+  try {
+    const token = authHeader.startsWith("Bearer ")
+      ? authHeader.slice(7)
+      : authHeader;
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch (err) {
+    return res.status(401).json({ message: "Token inválido o expirado" });
+  }
+}
+
+// --------------------
+// 👤 AUTH
+// --------------------
+app.post("/api/register", async (req, res) => {
+  try {
+    const { nombre, email, password, rol } = req.body;
+    const hashed = await bcrypt.hash(password, 10);
+    const user = await prisma.usuario.create({
+      data: { nombre, email, password: hashed, rol },
+    });
+    res.json(user);
+  } catch (error) {
+    console.error("❌ Error en registro:", error);
+    res.status(500).json({ message: "Error interno al registrar usuario" });
+  }
+});
+
+app.post("/api/login", async (req, res) => {
+  const { email, password } = req.body;
+  const user = await prisma.usuario.findUnique({ where: { email } });
+  if (!user) return res.status(401).json({ message: "Usuario no existe" });
+
+  const passwordMatch = await bcrypt.compare(password, user.password);
+  if (!passwordMatch)
+    return res.status(401).json({ message: "Credenciales incorrectas" });
+
+  const token = jwt.sign(
+    { id: user.id, rol: user.rol },
+    process.env.JWT_SECRET,
+    { expiresIn: "1d" }
+  );
+
+  res.json({ token, rol: user.rol, nombre: user.nombre });
+});
+
+// --------------------
+// 💰 INGRESOS
+// --------------------
+app.get("/api/ingresos", verifyToken, async (_, res) => {
+  const ingresos = await prisma.ingreso.findMany({ orderBy: { fecha: "desc" } });
+  res.json(ingresos);
+});
+
+app.post("/api/ingresos", verifyToken, async (req, res) => {
+  try {
+    const { categoria, descripcion, monto, fecha } = req.body;
+    const ingreso = await prisma.ingreso.create({
+      data: {
+        categoria,
+        descripcion,
+        monto: parseFloat(monto),
+        fecha: new Date(fecha),
+      },
+    });
+    res.json(ingreso);
+  } catch (error) {
+    console.error("❌ Error creando ingreso:", error);
+    res.status(500).json({ message: "Error interno al crear ingreso" });
+  }
+});
+
+app.put("/api/ingresos/:id", verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { categoria, descripcion, monto, fecha } = req.body;
+    const ingreso = await prisma.ingreso.update({
+      where: { id: parseInt(id) },
+      data: { categoria, descripcion, monto: parseFloat(monto), fecha: new Date(fecha) },
+    });
+    res.json(ingreso);
+  } catch (error) {
+    console.error("❌ Error actualizando ingreso:", error);
+    res.status(500).json({ message: "Error interno al actualizar ingreso" });
+  }
+});
+
+app.delete("/api/ingresos/:id", verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await prisma.ingreso.delete({ where: { id: parseInt(id) } });
+    res.json({ message: "Ingreso eliminado correctamente" });
+  } catch (error) {
+    console.error("❌ Error eliminando ingreso:", error);
+    res.status(500).json({ message: "Error interno al eliminar ingreso" });
+  }
+});
+
+// --------------------
+// 💸 EGRESOS
+// --------------------
+app.get("/api/egresos", verifyToken, async (_, res) => {
+  const egresos = await prisma.egreso.findMany({ orderBy: { fecha: "desc" } });
+  res.json(egresos);
+});
+
+app.post("/api/egresos", verifyToken, async (req, res) => {
+  try {
+    const { categoria, descripcion, monto, fecha } = req.body;
+    const egreso = await prisma.egreso.create({
+      data: {
+        categoria,
+        descripcion,
+        monto: parseFloat(monto),
+        fecha: new Date(fecha),
+      },
+    });
+    res.json(egreso);
+  } catch (error) {
+    console.error("❌ Error creando egreso:", error);
+    res.status(500).json({ message: "Error interno al crear egreso" });
+  }
+});
+
+app.put("/api/egresos/:id", verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { categoria, descripcion, monto, fecha } = req.body;
+    const egreso = await prisma.egreso.update({
+      where: { id: parseInt(id) },
+      data: { categoria, descripcion, monto: parseFloat(monto), fecha: new Date(fecha) },
+    });
+    res.json(egreso);
+  } catch (error) {
+    console.error("❌ Error actualizando egreso:", error);
+    res.status(500).json({ message: "Error interno al actualizar egreso" });
+  }
+});
+
+app.delete("/api/egresos/:id", verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await prisma.egreso.delete({ where: { id: parseInt(id) } });
+    res.json({ message: "Egreso eliminado correctamente" });
+  } catch (error) {
+    console.error("❌ Error eliminando egreso:", error);
+    res.status(500).json({ message: "Error interno al eliminar egreso" });
+  }
+});
+
+// --------------------
+// 📊 REPORTES
+// --------------------
+app.get("/api/reportes/resumen", verifyToken, async (req, res) => {
+  try {
+    const { from, to } = req.query;
+    const where = {};
+    if (from || to) {
+      where.fecha = {};
+      if (from) where.fecha.gte = new Date(from);
+      if (to) where.fecha.lte = new Date(to + "T23:59:59.999Z");
+    }
+
+    const ingresos = await prisma.ingreso.aggregate({ _sum: { monto: true }, where });
+    const egresos = await prisma.egreso.aggregate({ _sum: { monto: true }, where });
+
+    res.json({
+      totalIngresos: ingresos._sum.monto ?? 0,
+      totalEgresos: egresos._sum.monto ?? 0,
+      balance: (ingresos._sum.monto ?? 0) - (egresos._sum.monto ?? 0),
+    });
+  } catch (error) {
+    console.error("❌ Error en /reportes/resumen:", error);
+    res.status(500).json({ message: "Error interno en reportes" });
+  }
+});
+
+app.get("/api/reportes/ingresos-por-categoria", verifyToken, async (req, res) => {
+  try {
+    const { from, to } = req.query;
+    const where = {};
+    if (from || to) {
+      where.fecha = {};
+      if (from) where.fecha.gte = new Date(from);
+      if (to) where.fecha.lte = new Date(to + "T23:59:59.999Z");
+    }
+
+    const data = await prisma.ingreso.groupBy({
+      by: ["categoria"],
+      _sum: { monto: true },
+      where,
+    });
+
+    res.json(data.map(d => ({ categoria: d.categoria, total: d._sum.monto ?? 0 })));
+  } catch (error) {
+    console.error("❌ Error en /reportes/ingresos-por-categoria:", error);
+    res.status(500).json({ message: "Error interno en reportes" });
+  }
+});
+
+app.get("/api/reportes/egresos-por-categoria", verifyToken, async (req, res) => {
+  try {
+    const { from, to } = req.query;
+    const where = {};
+    if (from || to) {
+      where.fecha = {};
+      if (from) where.fecha.gte = new Date(from);
+      if (to) where.fecha.lte = new Date(to + "T23:59:59.999Z");
+    }
+
+    const data = await prisma.egreso.groupBy({
+      by: ["categoria"],
+      _sum: { monto: true },
+      where,
+    });
+
+    res.json(data.map(d => ({ categoria: d.categoria, total: d._sum.monto ?? 0 })));
+  } catch (error) {
+    console.error("❌ Error en /reportes/egresos-por-categoria:", error);
+    res.status(500).json({ message: "Error interno en reportes" });
+  }
+});
+
+// --------------------
+// 🚀 SERVIDOR
+// --------------------
+app.listen(process.env.PORT, () => {
+  console.log(`✅ Backend en http://localhost:${process.env.PORT}`);
+});
