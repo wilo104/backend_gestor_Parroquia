@@ -276,6 +276,7 @@ app.get("/api/reportes/egresos-por-categoria", verifyToken, async (req, res) => 
 // --------------------
 // 🚀 SERVIDOR
 // --------------------
-app.listen(process.env.PORT, () => {
-  console.log(`✅ Backend en http://localhost:${process.env.PORT}`);
+const PORT = process.env.PORT || 4000;
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`✅ Backend en ejecución en el puerto ${PORT}`);
 });
