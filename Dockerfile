@@ -1,20 +1,19 @@
 FROM node:20
 WORKDIR /app
 
-# 1) Instala deps con caché eficiente
+# 1) instalar deps (cache-friendly)
 COPY package*.json ./
 RUN npm ci
 
-# 2) Copia Prisma y código
+# 2) copiar prisma y el código
 COPY prisma ./prisma/
 COPY src ./src/
 
-# 3) Genera Prisma Client (NO necesita conectarse a la DB)
+# 3) generar prisma client (no toca DB)
 RUN npx prisma generate
 
-# 4) Expón (informativo); Koyeb inyecta PORT
+# 4) puerto (informativo para ti, Koyeb inyecta PORT)
 EXPOSE 3000
 
-# 5) Arranque: aplica migraciones y levanta el server
-#    (ajusta si tu entrypoint es distinto)
+# 5) aplicar migraciones al inicio y arrancar
 CMD npx prisma migrate deploy && node src/server.js
