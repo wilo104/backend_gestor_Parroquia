@@ -340,6 +340,19 @@ app.get("/api/debug/config", async (_, res) => {
 });
 
 
+app.get("/api/debug/db", async (_, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ dbOk: true });
+  } catch (e) {
+    console.error("DB error detail:", e); // se ve en Logs de Koyeb
+    res.status(500).json({
+      dbOk: false,
+      code: e.code || null,
+      message: e.message || String(e).slice(0, 500)
+    });
+  }
+});
 
 
 
