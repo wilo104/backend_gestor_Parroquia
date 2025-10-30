@@ -321,6 +321,28 @@ app.get("/api/reportes/egresos-por-categoria", verifyToken, async (req, res) => 
   }
 });
 
+
+app.get("/api/health", (_, res) => res.json({ ok: true }));
+
+app.get("/api/debug/config", async (_, res) => {
+  let dbOk = true;
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+  } catch (e) {
+    dbOk = false;
+    console.error("DB check failed:", e);
+  }
+  res.json({
+    hasJwtSecret: !!process.env.JWT_SECRET,
+    hasDatabaseUrl: !!process.env.DATABASE_URL,
+    dbOk
+  });
+});
+
+
+
+
+
 // --------------------
 // 🚀 SERVIDOR
 // --------------------
