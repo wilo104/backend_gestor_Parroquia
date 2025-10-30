@@ -25,6 +25,7 @@ const defaultOrigins = [
   "http://localhost:4200",
   
   "https://frontend-gestor-parroquia.vercel.app",
+   "https://frontend-gestor-parroquia-650abgno2.vercel.app",
 ];
 
 const whitelist = (process.env.FRONTEND_ORIGINS
