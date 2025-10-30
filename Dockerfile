@@ -1,15 +1,21 @@
 FROM node:20
-
 WORKDIR /app
 
+# 1) Manifiestos + Prisma antes de instalar deps
 COPY package*.json ./
 COPY prisma ./prisma/
-COPY src ./src/
 
-RUN npm install
+# 2) Instala deps SIN ejecutar postinstall (evita que 'prisma generate' falle)
+RUN npm ci --ignore-scripts
+
+# 3) Genera Prisma Client (ya existe /prisma y node_modules)
 RUN npx prisma generate
 
-ENV PORT=8000
-EXPOSE 8000
+# 4) Copia el código fuente
+COPY src ./src/
 
-CMD ["npm", "start"]
+# 5) No fijes un puerto; Koyeb inyecta PORT
+EXPOSE 3000
+
+# 6) Aplica migraciones en cada arranque y levanta el server
+CMD npx prisma migrate deploy && node src/server.js
