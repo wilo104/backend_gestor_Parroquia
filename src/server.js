@@ -355,6 +355,14 @@ app.get("/api/debug/db", async (_, res) => {
 });
 
 
+app.get("/api/debug/env", (_, res) => {
+  const mask = (s='') => s.replace(/:\/\/([^:]+):[^@]+@/, '://$1:***@');
+  res.json({
+    databaseUrl: mask(process.env.DATABASE_URL || ''),
+    nodeEnv: process.env.NODE_ENV || 'undefined'
+  });
+});
+
 
 // --------------------
 // 🚀 SERVIDOR
