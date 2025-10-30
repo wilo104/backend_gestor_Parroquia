@@ -1,20 +1,20 @@
 FROM node:20
 WORKDIR /app
 
-# Evita copiar node_modules desde tu máquina
+# 1) Instala deps con caché eficiente
 COPY package*.json ./
 RUN npm ci
 
-# Copia Prisma y código fuente JS
+# 2) Copia Prisma y código
 COPY prisma ./prisma/
 COPY src ./src/
 
-# Genera Prisma Client
+# 3) Genera Prisma Client (NO necesita conectarse a la DB)
 RUN npx prisma generate
 
-# Exponer puerto solo informativo (Koyeb inyecta PORT)
+# 4) Expón (informativo); Koyeb inyecta PORT
 EXPOSE 3000
 
-# Aplica migraciones al inicio y arranca tu servidor JS
-# Cambia 'src/index.js' por tu archivo real (donde haces app.listen)
-CMD npx prisma migrate deploy && node src/index.js
+# 5) Arranque: aplica migraciones y levanta el server
+#    (ajusta si tu entrypoint es distinto)
+CMD npx prisma migrate deploy && node src/server.js

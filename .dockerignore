@@ -1,10 +1,6 @@
 node_modules
 dist
-npm-debug.log*
-.yarn
 .git
-.gitignore
-Dockerfile
 .env
 .env.*
-coverage
+Dockerfile
